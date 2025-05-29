@@ -4,6 +4,7 @@
 ##  Current project ##
 build/
 out/
+.cache/
 
 ### unit_2 ###
 truth_table

@@ -6,6 +6,7 @@
  * given duration and multiple consumer threads that save these images to disk.
  */
 #include <iostream>
+#include <atomic>
 #include <pthread.h>
 #include <queue>
 #include <chrono>
@@ -52,6 +53,7 @@ static pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
 static bool producerDone = false;
 static bool timedOut = false;
+static std::atomic<int> savedFrames{0};
 
 /**
  * @brief Generates a random color image of specified dimensions.
@@ -123,7 +125,7 @@ void* producer(void* arg) {
     producerDone = true;
     pthread_cond_broadcast(&queueCond);
     pthread_mutex_unlock(&queueMutex);
-    std::cout << "Fps saved while execution " << frame_id / ((req->duration_minutes*60)) << "\n";
+    std::cout << "Average generator fps " << frame_id / ((req->duration_minutes*60)) << "\n";
     return nullptr;
 }
 
@@ -154,8 +156,9 @@ void* consumer(void* arg) {
         int remaining = q.size();
         pthread_mutex_unlock(&queueMutex);
 
-        string filename = "../out/random_image_" + to_string(item.id) + ".jpg";
+        string filename = "../out/random_image_" + to_string(item.id+1) + ".jpg";
         cv::imwrite(filename, item.img);
+        savedFrames++;
         cout << "[Consumer " << tid << "] saved " << filename
              << ", queue size = " << remaining << "\n";
     }
@@ -198,6 +201,9 @@ int main_generator(int frames, int minutes, int num_threads) {
     for (int i = 0; i < num_threads; ++i) {
         pthread_join(threads[i], nullptr);
     }
+
+    int totalFrames = savedFrames.load();
+    std::cout << "Average consumer fps " << totalFrames / ((req->duration_minutes*60)) << "\n";
 
     delete[] args;
     delete req;
