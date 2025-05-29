@@ -180,13 +180,6 @@ int main_generator(int frames, int minutes, int num_threads) {
     Requirements* req = new Requirements{1280, 720, frames, num_threads, minutes};
     Consumer_Args* args = new Consumer_Args[num_threads];
 
-    // Reset state
-    pthread_mutex_lock(&queueMutex);
-    producerDone = false;
-    timedOut = false;
-    while (!q.empty()) q.pop();
-    pthread_mutex_unlock(&queueMutex);
-
     // Create threads
     pthread_t threads[num_threads];
     pthread_create(&threads[0], nullptr, producer, req);
