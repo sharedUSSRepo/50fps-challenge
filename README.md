@@ -13,7 +13,7 @@ To run this project, you need to have the following dependencies installed:
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/AlanSilvaaa/os_alan_vinbu/tree/main/unit_2/sol_2
+   git clone https://github.com/sharedUSSRepo/50fps-challenge.git
    ```
 2. Create a build and out directory:
    ```bash
