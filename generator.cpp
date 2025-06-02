@@ -74,12 +74,14 @@ cv::Mat generateRandomImage(int w, int h) {
  * This function runs until the specified duration elapses or a timeout flag is set.
  * It pushes generated images into a shared queue for consumers to process.
  *
+ * Added debugging prints for generation time and queue size.
+ *
  * @param arg Pointer to Requirements structure.
  * @return nullptr upon completion.
  */
 void* producer(void* arg) {
     Requirements* req = static_cast<Requirements*>(arg);
-    const double fps = req -> frames;
+    const double fps = req->frames;
     const auto framePeriod = std::chrono::duration<double>(1.0 / fps);
     auto startTime = std::chrono::high_resolution_clock::now();
     auto endTime = startTime + std::chrono::minutes(req->duration_minutes);
@@ -88,7 +90,7 @@ void* producer(void* arg) {
     int frame_id = 0;
 
     while (std::chrono::high_resolution_clock::now() < endTime) {
-        auto frameStart = std::chrono::high_resolution_clock::now();
+        auto loopStart = std::chrono::high_resolution_clock::now();
 
         pthread_mutex_lock(&queueMutex);
         if (timedOut) {
@@ -97,16 +99,26 @@ void* producer(void* arg) {
         }
         pthread_mutex_unlock(&queueMutex);
 
-        // Generate image
+        // Time how long it takes to generate the image
+        auto genStart = std::chrono::high_resolution_clock::now();
         cv::Mat img = generateRandomImage(req->imageWidth, req->imageHeight);
-        img_data data{ frame_id++, img };
+        auto genEnd = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> genElapsed = genEnd - genStart;
+        std::cout << "[Producer] frame " << frame_id
+                  << " generation time: " << genElapsed.count() << " ms\n";
 
-        // Measure time taken
+        img_data data{ frame_id, img };
+        frame_id++;
+
+        // Measure and apply sleep if needed
         auto frameEnd = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = frameEnd - frameStart;
-
+        std::chrono::duration<double> elapsed = frameEnd - loopStart;
         if (elapsed < framePeriod) {
-            std::this_thread::sleep_for(framePeriod - elapsed);
+            auto sleepTime = framePeriod - elapsed;
+            std::cout << "[Producer] sleeping for " 
+                      << std::chrono::duration<double, std::milli>(sleepTime).count()
+                      << " ms to maintain " << fps << " fps\n";
+            std::this_thread::sleep_for(sleepTime);
         }
 
         // Push to queue
@@ -116,16 +128,22 @@ void* producer(void* arg) {
             break;
         }
         q.push(data);
-        std::cout << "[Producer] queued image " << frame_id
-                  << ", queue size = " << q.size() << "\n";
+        size_t currentSize = q.size();
+        std::cout << "[Producer] queued image " << data.id
+                  << ", queue size = " << currentSize << "\n";
         pthread_cond_signal(&queueCond);
         pthread_mutex_unlock(&queueMutex);
     }
+
     pthread_mutex_lock(&queueMutex);
     producerDone = true;
     pthread_cond_broadcast(&queueCond);
     pthread_mutex_unlock(&queueMutex);
-    std::cout << "Average generator fps " << frame_id / ((req->duration_minutes*60)) << "\n";
+
+    double totalSeconds = req->duration_minutes * 60.0;
+    double effectiveFps = static_cast<double>(frame_id) / totalSeconds;
+    std::cout << "[Producer] Finished. Effective generation fps: " 
+              << effectiveFps << "\n";
     return nullptr;
 }
 
@@ -133,6 +151,8 @@ void* producer(void* arg) {
  * @brief Consumer thread function that saves images from the queue to disk.
  *
  * Each consumer waits for images to become available, then writes them to jpg files.
+ *
+ * Added debugging prints for save time and queue state.
  *
  * @param arg Pointer to Consumer_Args structure containing thread info.
  * @return nullptr upon completion.
@@ -156,11 +176,21 @@ void* consumer(void* arg) {
         int remaining = q.size();
         pthread_mutex_unlock(&queueMutex);
 
-        string filename = "../out/random_image_" + to_string(item.id+1) + ".jpg";
-        cv::imwrite(filename, item.img);
-        savedFrames++;
-        cout << "[Consumer " << tid << "] saved " << filename
-             << ", queue size = " << remaining << "\n";
+        // Time how long it takes to save the image
+        auto saveStart = std::chrono::high_resolution_clock::now();
+        string filename = "../out/random_image_" + to_string(item.id + 1) + ".jpg";
+        bool ok = cv::imwrite(filename, item.img);
+        auto saveEnd = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> saveElapsed = saveEnd - saveStart;
+
+        if (!ok) {
+            std::cerr << "[Consumer " << tid << "] failed to save " << filename << "\n";
+        } else {
+            savedFrames++;
+            cout << "[Consumer " << tid << "] saved " << filename
+                 << ", save time: " << saveElapsed.count() << " ms"
+                 << ", queue size = " << remaining << "\n";
+        }
     }
     return nullptr;
 }
@@ -196,10 +226,12 @@ int main_generator(int frames, int minutes, int num_threads) {
     }
 
     int totalFrames = savedFrames.load();
-    std::cout << "Average consumer fps " << totalFrames / ((req->duration_minutes*60)) << "\n";
+    std::cout << "[Main] Average consumer fps " 
+              << (totalFrames / (req->duration_minutes * 60)) << "\n";
 
     delete[] args;
     delete req;
-    std::cout << "\nProgram finished after " << minutes << " minutes.\n";
+    std::cout << "\n[Main] Program finished after " << minutes << " minutes.\n";
     return 0;
 }
+
