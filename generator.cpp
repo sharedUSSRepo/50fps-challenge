@@ -54,6 +54,10 @@ static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
 static bool producerDone = false;
 static bool timedOut = false;
 static std::atomic<int> savedFrames{0};
+static std::atomic<float> generationTime{0};
+static std::atomic<float> saveTime{0};
+static std::atomic<float> qTime{0};
+static std::atomic<int> qCounter{0};
 
 /**
  * @brief Generates a random color image of specified dimensions.
@@ -84,10 +88,12 @@ void* producer(void* arg) {
     const double fps = req->frames;
     const auto framePeriod = std::chrono::duration<double>(1.0 / fps);
     auto startTime = std::chrono::high_resolution_clock::now();
-    auto endTime = startTime + std::chrono::minutes(req->duration_minutes);
-    // auto endTime = startTime + std::chrono::seconds(10); // For testing, set to 10 seconds
+    // auto endTime = startTime + std::chrono::minutes(req->duration_minutes);
+    auto endTime = startTime + std::chrono::seconds(10); // For testing, set to 10 seconds
 
     int frame_id = 0;
+
+    cv::Mat permanentImage = generateRandomImage(req->imageWidth, req->imageHeight);
 
     while (std::chrono::high_resolution_clock::now() < endTime) {
         auto loopStart = std::chrono::high_resolution_clock::now();
@@ -101,7 +107,7 @@ void* producer(void* arg) {
 
         // Time how long it takes to generate the image
         auto genStart = std::chrono::high_resolution_clock::now();
-        cv::Mat img = generateRandomImage(req->imageWidth, req->imageHeight);
+        cv::Mat img = permanentImage;
         auto genEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> genElapsed = genEnd - genStart;
         std::cout << "[Producer] frame " << frame_id
@@ -127,7 +133,15 @@ void* producer(void* arg) {
             pthread_mutex_unlock(&queueMutex);
             break;
         }
+        auto startQ = std::chrono::high_resolution_clock::now();
         q.push(data);
+        auto endQ = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsedQ = endQ - startQ;
+        qTime = qTime + elapsedQ.count();
+        qCounter++;
+        std::cout << "[Producer] queue push time: " 
+                  << std::chrono::duration<double, std::milli>(elapsedQ).count() 
+                  << " ms\n";
         size_t currentSize = q.size();
         std::cout << "[Producer] queued image " << data.id
                   << ", queue size = " << currentSize << "\n";
@@ -207,7 +221,7 @@ void* consumer(void* arg) {
  * @return 0 on success.
  */
 int main_generator(int frames, int minutes, int num_threads) {
-    Requirements* req = new Requirements{1280, 720, frames, num_threads, minutes};
+    Requirements* req = new Requirements{1920, 1280, frames, num_threads, minutes};
     Consumer_Args* args = new Consumer_Args[num_threads];
 
     // Create threads
@@ -228,6 +242,15 @@ int main_generator(int frames, int minutes, int num_threads) {
     int totalFrames = savedFrames.load();
     std::cout << "[Main] Average consumer fps " 
               << (totalFrames / (req->duration_minutes * 60)) << "\n";
+
+    // print q stats
+    cout << "[Main] Queue stats: "
+         << "Total frames saved: " << totalFrames
+         << ", Total generation time: " << generationTime.load() << " seconds"
+         << ", Total save time: " << saveTime.load() << " seconds"
+         << ", Total queue time: " << qTime.load() << " seconds"
+         << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
+         << ", Queue operations: " << qCounter.load() << "\n";
 
     delete[] args;
     delete req;
