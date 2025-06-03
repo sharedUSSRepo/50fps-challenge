@@ -110,6 +110,7 @@ void* producer(void* arg) {
         cv::Mat img = permanentImage;
         auto genEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> genElapsed = genEnd - genStart;
+        generationTime = generationTime + genElapsed.count();
         std::cout << "[Producer] frame " << frame_id
                   << " generation time: " << genElapsed.count() << " ms\n";
 
@@ -137,7 +138,7 @@ void* producer(void* arg) {
         q.push(data);
         auto endQ = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsedQ = endQ - startQ;
-        qTime = qTime + elapsedQ.count();
+        qTime = qTime + std::chrono::duration<double, std::milli>(elapsedQ).count();
         qCounter++;
         std::cout << "[Producer] queue push time: " 
                   << std::chrono::duration<double, std::milli>(elapsedQ).count() 
@@ -196,6 +197,7 @@ void* consumer(void* arg) {
         bool ok = cv::imwrite(filename, item.img);
         auto saveEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> saveElapsed = saveEnd - saveStart;
+        saveTime = saveTime + saveElapsed.count();
 
         if (!ok) {
             std::cerr << "[Consumer " << tid << "] failed to save " << filename << "\n";
@@ -245,12 +247,11 @@ int main_generator(int frames, int minutes, int num_threads) {
 
     // print q stats
     cout << "[Main] Queue stats: "
-         << "Total frames saved: " << totalFrames
-         << ", Total generation time: " << generationTime.load() << " seconds"
-         << ", Total save time: " << saveTime.load() << " seconds"
-         << ", Total queue time: " << qTime.load() << " seconds"
-         << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
-         << ", Queue operations: " << qCounter.load() << "\n";
+        << "Total frames saved: " << totalFrames
+        << ", Average generation time: " << generationTime.load()/totalFrames << " miliseconds"
+        << ", Average save time: " << saveTime.load()/totalFrames << " miliseconds"
+        << ", Total queue time: " << qTime.load() << " miliseconds"
+        << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
 
     delete[] args;
     delete req;
