@@ -8,23 +8,24 @@
 #include <iostream>
 #include <atomic>
 #include <pthread.h>
-#include <queue>
+#include "modules/SafetyQueue.h"
 #include <chrono>
 #include <thread>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include "./modules.h"
 
+static pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
+static bool producerDone = false;
+static bool timedOut = false;
+static std::atomic<int> savedFrames{0};
+static std::atomic<float> generationTime{0};
+static std::atomic<float> saveTime{0};
+static std::atomic<float> qTime{0};
+static std::atomic<int> qCounter{0};
+SafetyQueue q;
 using namespace std;
-
-/**
- * @struct img_data
- * @brief Container for image data and its identifier.
- */
-struct img_data {
-    int id;
-    cv::Mat img;
-};
 
 /**
  * @struct Requirements
@@ -47,17 +48,6 @@ struct Consumer_Args {
     Requirements* req;
 };
 
-// Shared state
-static queue<img_data> q;
-static pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t queueCond = PTHREAD_COND_INITIALIZER;
-static bool producerDone = false;
-static bool timedOut = false;
-static std::atomic<int> savedFrames{0};
-static std::atomic<float> generationTime{0};
-static std::atomic<float> saveTime{0};
-static std::atomic<float> qTime{0};
-static std::atomic<int> qCounter{0};
 
 /**
  * @brief Generates a random color image of specified dimensions.
@@ -84,6 +74,7 @@ cv::Mat generateRandomImage(int w, int h) {
  * @return nullptr upon completion.
  */
 void* producer(void* arg) {
+
     Requirements* req = static_cast<Requirements*>(arg);
     const double fps = req->frames;
     const auto framePeriod = std::chrono::duration<double>(1.0 / fps);
@@ -98,6 +89,7 @@ void* producer(void* arg) {
     while (std::chrono::high_resolution_clock::now() < endTime) {
         auto loopStart = std::chrono::high_resolution_clock::now();
 
+        // Check timeout under lock
         pthread_mutex_lock(&queueMutex);
         if (timedOut) {
             pthread_mutex_unlock(&queueMutex);
@@ -111,8 +103,7 @@ void* producer(void* arg) {
         auto genEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> genElapsed = genEnd - genStart;
         generationTime = generationTime + genElapsed.count();
-        std::cout << "[Producer] frame " << frame_id
-                  << " generation time: " << genElapsed.count() << " ms\n";
+        std::cout << "[Producer] frame " << frame_id;
 
         img_data data{ frame_id, img };
         frame_id++;
@@ -128,12 +119,7 @@ void* producer(void* arg) {
             std::this_thread::sleep_for(sleepTime);
         }
 
-        // Push to queue
-        pthread_mutex_lock(&queueMutex);
-        if (timedOut) {
-            pthread_mutex_unlock(&queueMutex);
-            break;
-        }
+        // Push to queue (locking moves inside SafetyQueue::push)
         auto startQ = std::chrono::high_resolution_clock::now();
         q.push(data);
         auto endQ = std::chrono::high_resolution_clock::now();
@@ -143,6 +129,9 @@ void* producer(void* arg) {
         std::cout << "[Producer] queue push time: " 
                   << std::chrono::duration<double, std::milli>(elapsedQ).count() 
                   << " ms\n";
+
+        // Signal consumers that a new item is available
+        pthread_mutex_lock(&queueMutex);
         size_t currentSize = q.size();
         std::cout << "[Producer] queued image " << data.id
                   << ", queue size = " << currentSize << "\n";
@@ -186,6 +175,7 @@ void* consumer(void* arg) {
             pthread_mutex_unlock(&queueMutex);
             break;
         }
+        // Safely retrieve front and pop under the same lock
         img_data item = q.front();
         q.pop();
         int remaining = q.size();
@@ -226,6 +216,10 @@ int main_generator(int frames, int minutes, int num_threads) {
     Requirements* req = new Requirements{1920, 1280, frames, num_threads, minutes};
     Consumer_Args* args = new Consumer_Args[num_threads];
 
+    // Define queue's properties
+    q.maxSize = 15;
+    q.queueMutex = queueMutex;
+    
     // Create threads
     pthread_t threads[num_threads];
     pthread_create(&threads[0], nullptr, producer, req);
@@ -247,15 +241,14 @@ int main_generator(int frames, int minutes, int num_threads) {
 
     // print q stats
     cout << "[Main] Queue stats: "
-        << "Total frames saved: " << totalFrames
+        << "Total frames saved: " << totalFrames << " frames"
         << ", Average generation time: " << generationTime.load()/totalFrames << " miliseconds"
         << ", Average save time: " << saveTime.load()/totalFrames << " miliseconds"
         << ", Total queue time: " << qTime.load() << " miliseconds"
-        << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
+        << ", Queue average: " << qTime.load()/qCounter.load() << " ms";
 
     delete[] args;
     delete req;
     std::cout << "\n[Main] Program finished after " << minutes << " minutes.\n";
     return 0;
 }
-
