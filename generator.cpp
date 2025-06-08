@@ -257,7 +257,8 @@ int main_generator(int width, int height, std::string image_format, int frames, 
         << ", Average generation time: " << generationTime.load()/totalFrames << " miliseconds"
         << ", Average save time: " << saveTime.load()/totalFrames << " miliseconds"
         << ", Total queue time: " << qTime.load() << " miliseconds"
-        << ", Queue average: " << qTime.load()/qCounter.load() << " ms";
+        << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
+        << ", Dropped frames: " << q.getDropCount() << "\n";
 
     delete[] args;
     delete req;

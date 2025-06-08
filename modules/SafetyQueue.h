@@ -26,11 +26,13 @@ class SafetyQueue {
         queue<img_data> q;
         int maxSize;
         pthread_mutex_t queueMutex;
+        int dropCount = 0;
 
         void push(const img_data& data) {
             pthread_mutex_lock(&queueMutex);
             if (q.size() >= maxSize) { // Example size limit
                 std::cerr << "[SafetyQueue] Queue is full, dropping frame " << data.id << "\n";
+                dropCount++;
                 q.pop(); // Drop the oldest frame
                 pthread_mutex_unlock(&queueMutex);
                 return;
@@ -62,5 +64,9 @@ class SafetyQueue {
 
         bool empty() {
             return q.empty();
+        }
+
+        int getDropCount() {
+            return dropCount;
         }
 };
