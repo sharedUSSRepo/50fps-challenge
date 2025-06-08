@@ -247,18 +247,19 @@ int main_generator(int width, int height, std::string image_format, int frames, 
         pthread_join(threads[i], nullptr);
     }
 
+    std::cout << "Total frames to generate and save (teoric): " << minutes * 60 * frames << " frames \n";
     int totalFrames = savedFrames.load();
     std::cout << "[Main] Average consumer fps " 
               << (totalFrames / (req->duration_minutes * 60)) << "\n";
 
     // print q stats
     cout << "[Main] Queue stats: "
-        << "Total frames saved: " << totalFrames << " frames"
-        << ", Average generation time: " << generationTime.load()/totalFrames << " miliseconds"
-        << ", Average save time: " << saveTime.load()/totalFrames << " miliseconds"
-        << ", Total queue time: " << qTime.load() << " miliseconds"
-        << ", Queue average: " << qTime.load()/qCounter.load() << " ms"
-        << ", Dropped frames: " << q.getDropCount() << "\n";
+        << "Total frames saved: " << totalFrames << " frames \n"
+        << "Average generation time: " << generationTime.load()/totalFrames << " miliseconds \n"
+        << "Average save time: " << saveTime.load()/totalFrames << " miliseconds \n"
+        << "Total queue time: " << qTime.load() << " miliseconds \n"
+        << "Queue average: " << qTime.load()/qCounter.load() << " ms \n"
+        << "Dropped frames: " << q.getDropCount() << "\n";
 
     delete[] args;
     delete req;
