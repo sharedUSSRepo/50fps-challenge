@@ -48,6 +48,7 @@ struct Requirements {
     int frames;
     int num_threads;
     int duration_minutes;
+    std::string image_format;
 };
 
 /**
@@ -194,7 +195,7 @@ void* consumer(void* arg) {
 
         // Time how long it takes to save the image
         auto saveStart = std::chrono::high_resolution_clock::now();
-        string filename = "../out/random_image_" + to_string(item.id + 1) + ".jpg";
+        string filename = "../out/random_image_" + to_string(item.id + 1) + "." + req->image_format;
         bool ok = cv::imwrite(filename, item.img);
         auto saveEnd = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> saveElapsed = saveEnd - saveStart;
@@ -223,8 +224,8 @@ void* consumer(void* arg) {
  * @param num_threads Number of consumer threads.
  * @return 0 on success.
  */
-int main_generator(int frames, int minutes, int num_threads) {
-    Requirements* req = new Requirements{1920, 1280, frames, num_threads, minutes};
+int main_generator(int width, int height, std::string image_format, int frames, int minutes, int num_threads) {
+    Requirements* req = new Requirements{width, height, frames, num_threads, minutes, image_format};
     Consumer_Args* args = new Consumer_Args[num_threads];
 
     // Define queue's properties

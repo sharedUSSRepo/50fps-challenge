@@ -20,6 +20,20 @@ int main(int argc, char *argv[]) {
         .default_value(8)
         .scan<'i', int>();
 
+    program.add_argument("-i")
+        .help("Set image format")
+        .default_value(std::string("jpg"));
+
+    program.add_argument("-w")
+        .help("Set image Width")
+        .default_value(1920)
+        .scan<'i', int>();
+
+    program.add_argument("-h")
+        .help("Set image Height")
+        .default_value(1280)
+        .scan<'i', int>();
+
     try {
         program.parse_args(argc, argv);
     }
@@ -32,13 +46,22 @@ int main(int argc, char *argv[]) {
     auto frames = program.get<int>("-f");
     auto minutes = program.get<int>("-m");
     auto threads = program.get<int>("-t");
+    auto image_format = program.get<std::string>("-i");
+    auto width = program.get<int>("-w");
+    auto height = program.get<int>("-h");
 
     std::cout << frames << std::endl;
-    
+
     std::cout << minutes << std::endl;
 
     std::cout << threads << std::endl;
 
-    main_generator(frames, minutes, threads);
+    std::cout << image_format << std::endl;
+
+    std::cout << width << std::endl;
+
+    std::cout << height << std::endl;
+
+    main_generator(width, height, image_format, frames, minutes, threads);
     return 0;
 }
