@@ -229,7 +229,7 @@ int main_generator(int width, int height, std::string image_format, int frames, 
     Consumer_Args* args = new Consumer_Args[num_threads];
 
     // Define queue's properties
-    q.maxSize = 15;
+    q.maxSize = 100;
     q.queueMutex = queueMutex;
     
     // Create threads
