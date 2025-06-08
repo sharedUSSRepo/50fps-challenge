@@ -91,8 +91,8 @@ void* producer(void* arg) {
     const double fps = req->frames;
     const auto framePeriod = std::chrono::duration<double>(1.0 / fps);
     auto startTime = std::chrono::high_resolution_clock::now();
-    // auto endTime = startTime + std::chrono::minutes(req->duration_minutes);
-    auto endTime = startTime + std::chrono::seconds(10); // For testing, set to 10 seconds
+    auto endTime = startTime + std::chrono::minutes(req->duration_minutes);
+    // auto endTime = startTime + std::chrono::seconds(10); // For testing, set to 10 seconds
 
     int frame_id = 0;
 
