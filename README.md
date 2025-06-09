@@ -35,7 +35,11 @@ The program can be run with the following command-line arguments:
 - `-f`: The number of images to generate per second (default is 50).
 - `-m`: The total time in seconds to run the image generation (default is 300 seconds, which is 5 minutes).
 - `-t`: The number of threads to use for image generation (default is 8).
+- `-i`: Set the image format, can be png, jpg, tiff or bmp (default is jpg).
+- `-w`: Set image Width (deafult is 1920).
+- `-h`: Set image Height (default is 1280).
 
+For each usage it´s necessary to clean the 'out' folder, so it´s recommended to move the generated images to another folder.
 ## Authors
 - @[AlanSilvaaa](https://github.com/AlanSilvaaa)
 - @[Vinbu](https://github.com/Vinbu)
